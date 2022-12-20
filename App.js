@@ -4,21 +4,74 @@ import {
   Dimensions,
   Image,
   SafeAreaView,
-  Text,
+  RefreshControl,
+  ScrollView,
   View,
   FlatList,
 } from 'react-native';
 import axios from 'axios';
+import Realm, {Object} from 'realm';
+
+let taskName;
+let realm;
+
+const wait = timeout => {
+  return new Promise(resolve => setTimeout(resolve, timeout));
+};
+
+const TaskSchema = {
+  name: 'Task',
+  properties: {
+    // _id: 'int',
+    name: 'string',
+    status: 'string?',
+  },
+  // primaryKey: '_id',
+};
+
+addToRealm = value => {
+  (async () => {
+    try {
+      realm = await Realm.open({
+        schema: [TaskSchema],
+        deleteRealmIfMigrationNeeded: true,
+      });
+      this.setState({realmObject: realm});
+
+      await realm.write(() => {
+        taskName = realm.create('Task', {
+          name: value,
+          status: 'Open',
+        });
+      });
+    } catch (e) {
+      console.log('error', e.message);
+    }
+  })();
+};
 
 export default class App extends Component {
   constructor(props) {
     super(props);
-    this.state = {imageURLs: [], imageTitle: []};
+    this.state = {
+      refreshing: false,
+      realmObject: Object,
+      imageName: '',
+      imageURLs: [],
+      imageTitle: [],
+      ImageBackupItems: [],
+    };
   }
 
   componentDidMount() {
     //For our first load.
     this.getImageURL();
+  }
+
+  getRealmValues() {
+    console.log('inside method', this.state.realmObject);
+    // const tasks = this.state.realmObject.objects('Task');
+    // console.log(`The lists of tasks are: ${tasks.map(task => task.name)}`);
   }
 
   getImageURL() {
@@ -35,6 +88,7 @@ export default class App extends Component {
       .catch(error => console.log(error));
     return;
   }
+
   getFlickrImageURL(photo) {
     let url = `https://farm${photo.farm}.staticflickr.com/${photo.server}/${photo.id}_${photo.secret}`;
     url += '.jpg';
@@ -43,13 +97,32 @@ export default class App extends Component {
     return url;
   }
 
+  onRefresh() {
+    this.state.refreshing = true;
+    console.log('images in array', this.state.imageURLs);
+    this.state.imageURLs = [];
+    this.getRealmValues();
+    console.log('images in array', this.state.imageURLs);
+    wait(2000).then(() => {
+      this.state.refreshing = false;
+    });
+  }
+
   render() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.container}>
           <FlatList
+            refreshControl={
+              <RefreshControl
+                colors={['#171417']}
+                refreshing={this.state.refreshing}
+                onRefresh={this.onRefresh.bind(this)}
+              />
+            }
             style={styles.flatListStyle}
             data={this.state.imageURLs}
+            // extraData={}
             numColumns={2}
             renderItem={({item}) => {
               return (
